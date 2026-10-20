@@ -11,7 +11,7 @@
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.infinity.wallpaper.MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -20,7 +20,7 @@
         </activity>
 
         <service
-            android:name=".InfinityWallpaperService"
+            android:name="com.infinity.wallpaper.InfinityWallpaperService"
             android:exported="true"
             android:label="S8 Infinity Modern"
             android:permission="android.permission.BIND_WALLPAPER">
