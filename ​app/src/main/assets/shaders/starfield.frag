@@ -10,6 +10,12 @@ void main() {
         discard;
     }
     
-    float intensity = 1.0 - (dist * 2.0);
-    gl_FragColor = vec4(0.8, 0.9, 1.0, v_Alpha * intensity);
+    // Merkezde yoğun parlaklık, kenarlarda yumuşak ışık halesi (Glow)
+    float core = smoothstep(0.5, 0.0, dist);
+    float glow = pow(core, 2.0);
+    
+    // S8 Infinity tarzı hafif mavi-beyaz uzay tonu
+    vec3 starColor = mix(vec3(0.65, 0.82, 1.0), vec3(1.0, 1.0, 1.0), core);
+    
+    gl_FragColor = vec4(starColor, v_Alpha * (core + glow * 0.5));
 }
