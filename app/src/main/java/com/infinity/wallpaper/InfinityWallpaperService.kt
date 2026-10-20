@@ -62,12 +62,46 @@ class InfinityWallpaperService : WallpaperService() {
         private val projectionMatrix = FloatArray(16)
         private val viewMatrix = FloatArray(16)
 
+        private val vertexShaderCode = """
+            attribute vec4 a_Position;
+            attribute float a_PointSize;
+            attribute float a_Alpha;
+            uniform mat4 u_MVPMatrix;
+            uniform vec2 u_Offset;
+            varying float v_Alpha;
+            void main() {
+                vec4 pos = a_Position;
+                pos.x += u_Offset.x * (pos.z * 0.15);
+                pos.y += u_Offset.y * (pos.z * 0.15);
+                gl_Position = u_MVPMatrix * pos;
+                gl_PointSize = a_PointSize;
+                v_Alpha = a_Alpha;
+            }
+        """.trimIndent()
+
+        private val fragmentShaderCode = """
+            precision mediump float;
+            varying float v_Alpha;
+            void main() {
+                vec2 coord = gl_PointCoord - vec2(0.5);
+                float dist = length(coord);
+                if (dist > 0.5) { discard; }
+                float core = smoothstep(0.5, 0.0, dist);
+                vec3 starColor = mix(vec3(0.65, 0.82, 1.0), vec3(1.0, 1.0, 1.0), core);
+                gl_FragColor = vec4(starColor, v_Alpha * core);
+            }
+        """.trimIndent()
+
         override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
-            GLES20.glClearColor(0.01f, 0.01f, 0.05f, 1.0f)
-            val vertCode = ShaderUtils.loadShaderFromAssets(context, "shaders/starfield.vert")
-            val fragCode = ShaderUtils.loadShaderFromAssets(context, "shaders/starfield.frag")
-            program = ShaderUtils.createProgram(vertCode, fragCode)
-            particleSystem = StarfieldParticleSystem(350)
+            // Gece mavisi / uzay arka plan rengi
+            GLES20.glClearColor(0.02f, 0.02f, 0.08f, 1.0f)
+            
+            try {
+                program = ShaderUtils.createProgram(vertexShaderCode, fragmentShaderCode)
+            } catch (e: Exception) {
+                // Program oluşturma hatası durumunda pas geç
+            }
+            particleSystem = StarfieldParticleSystem(600)
         }
 
         override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
@@ -80,6 +114,8 @@ class InfinityWallpaperService : WallpaperService() {
 
         override fun onDrawFrame(gl: GL10?) {
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
+            if (program == 0) return
+
             GLES20.glUseProgram(program)
 
             val uMVPMatrixLoc = GLES20.glGetUniformLocation(program, "u_MVPMatrix")
