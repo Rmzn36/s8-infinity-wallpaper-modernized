@@ -22,13 +22,13 @@ class MainActivity : Activity() {
         }
 
         val button = Button(this).apply {
-            text = "S8 Infinity Duvar Kağıdını Uygula"
+            text = "Duvar Kağıdı Ayarlarını Aç"
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.parseColor("#1A73E8"))
             textSize = 16f
             setPadding(40, 25, 40, 25)
             setOnClickListener {
-                openLiveWallpaperPicker()
+                openWallpaperSettings()
             }
         }
 
@@ -36,36 +36,31 @@ class MainActivity : Activity() {
         setContentView(layout)
     }
 
-    private fun openLiveWallpaperPicker() {
+    private fun openWallpaperSettings() {
         val componentName = ComponentName(packageName, "$packageName.InfinityWallpaperService")
         
-        // Yöntem 1: Doğrudan servisin önizleme ekranını tetikleme
-        val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
-            putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, componentName)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val intents = arrayOf(
+            Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
+                putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, componentName)
+            },
+            Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER),
+            Intent(Intent.ACTION_SET_WALLPAPER)
+        )
+
+        var success = false
+        for (intent in intents) {
+            try {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(intent)
+                success = true
+                break
+            } catch (e: Exception) {
+                // Sonraki yöntemi dene
+            }
         }
 
-        try {
-            startActivity(intent)
-        } catch (e: Exception) {
-            // Yöntem 2: Samsung özel duvar kağıdı yönlendirmesi
-            try {
-                val samsungIntent = Intent("android.service.wallpaper.CHANGE_LIVE_WALLPAPER").apply {
-                    putExtra("android.service.wallpaper.extra.LIVE_WALLPAPER_COMPONENT", componentName)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                startActivity(samsungIntent)
-            } catch (ex: Exception) {
-                // Yöntem 3: Genel canlı duvar kağıdı listesini açma
-                try {
-                    val chooserIntent = Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    startActivity(chooserIntent)
-                } catch (lastEx: Exception) {
-                    Toast.makeText(this, "Canlı duvar kağıdı seçicisi başlatılamadı.", Toast.LENGTH_LONG).show()
-                }
-            }
+        if (!success) {
+            Toast.makeText(this, "Lütfen Ayarlar > Duvar Kağıdı menüsünden seçin.", Toast.LENGTH_LONG).show()
         }
     }
 }
