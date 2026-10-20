@@ -6,7 +6,7 @@ import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import java.util.Random
 
-class StarfieldParticleSystem(private val particleCount: Int = 350) {
+class StarfieldParticleSystem(private val particleCount: Int = 750) {
 
     private val vertexBuffer: FloatBuffer
     private val pointSizeBuffer: FloatBuffer
@@ -19,12 +19,13 @@ class StarfieldParticleSystem(private val particleCount: Int = 350) {
         val alphas = FloatArray(particleCount)
 
         for (i in 0 until particleCount) {
-            vertices[i * 3] = (random.nextFloat() * 2f) - 1f
-            vertices[i * 3 + 1] = (random.nextFloat() * 2f) - 1f
-            vertices[i * 3 + 2] = random.nextFloat() * 3f + 1f
+            vertices[i * 3] = (random.nextFloat() * 2.4f) - 1.2f
+            vertices[i * 3 + 1] = (random.nextFloat() * 2.4f) - 1.2f
+            vertices[i * 3 + 2] = random.nextFloat() * 4.0f + 0.8f
 
-            sizes[i] = random.nextFloat() * 12f + 4f
-            alphas[i] = random.nextFloat() * 0.7f + 0.3f
+            // Farklı derinliklerdeki yıldız boyutları (6px - 22px)
+            sizes[i] = random.nextFloat() * 16f + 6f
+            alphas[i] = random.nextFloat() * 0.85f + 0.15f
         }
 
         vertexBuffer = ByteBuffer.allocateDirect(vertices.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer().put(vertices)
