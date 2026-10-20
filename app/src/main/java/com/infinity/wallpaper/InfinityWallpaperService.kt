@@ -22,7 +22,9 @@ class InfinityWallpaperService : WallpaperService() {
             super.onCreate(surfaceHolder)
             renderer = InfinityRenderer(this@InfinityWallpaperService)
             glSurfaceView = GLEngineSurfaceView(surfaceHolder)
+            glSurfaceView?.setEGLContextClientVersion(2)
             glSurfaceView?.setRenderer(renderer)
+            glSurfaceView?.renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
 
             sensorListener = SensorListener(this@InfinityWallpaperService) { x, y ->
                 renderer?.offsetX = x
@@ -71,8 +73,8 @@ class InfinityWallpaperService : WallpaperService() {
             varying float v_Alpha;
             void main() {
                 vec4 pos = a_Position;
-                pos.x += u_Offset.x * (pos.z * 0.15);
-                pos.y += u_Offset.y * (pos.z * 0.15);
+                pos.x += u_Offset.x * (pos.z * 0.12);
+                pos.y += u_Offset.y * (pos.z * 0.12);
                 gl_Position = u_MVPMatrix * pos;
                 gl_PointSize = a_PointSize;
                 v_Alpha = a_Alpha;
@@ -87,21 +89,15 @@ class InfinityWallpaperService : WallpaperService() {
                 float dist = length(coord);
                 if (dist > 0.5) { discard; }
                 float core = smoothstep(0.5, 0.0, dist);
-                vec3 starColor = mix(vec3(0.65, 0.82, 1.0), vec3(1.0, 1.0, 1.0), core);
+                vec3 starColor = mix(vec3(0.6, 0.8, 1.0), vec3(1.0, 1.0, 1.0), core);
                 gl_FragColor = vec4(starColor, v_Alpha * core);
             }
         """.trimIndent()
 
         override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
-            // Gece mavisi / uzay arka plan rengi
             GLES20.glClearColor(0.02f, 0.02f, 0.08f, 1.0f)
-            
-            try {
-                program = ShaderUtils.createProgram(vertexShaderCode, fragmentShaderCode)
-            } catch (e: Exception) {
-                // Program oluşturma hatası durumunda pas geç
-            }
-            particleSystem = StarfieldParticleSystem(600)
+            program = ShaderUtils.createProgram(vertexShaderCode, fragmentShaderCode)
+            particleSystem = StarfieldParticleSystem(650)
         }
 
         override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
