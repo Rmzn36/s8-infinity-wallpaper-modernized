@@ -2,30 +2,31 @@ package com.infinity.wallpaper
 
 import android.content.Context
 import android.opengl.GLES20
-import android.opengl.GLSurfaceView
+import android.opengl.GLUtils
 import android.opengl.Matrix
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
-import javax.microedition.khronos.egl.EGLConfig
-import javax.microedition.khronos.opengles.GL10
+import javax.microedition.khronos.egl.*
 
 class InfinityWallpaperService : WallpaperService() {
 
     override fun onCreateEngine(): Engine = InfinityEngine()
 
-    inner class InfinityEngine : Engine() {
-        private var glSurfaceView: GLEngineSurfaceView? = null
+    inner class InfinityEngine : Engine(), Runnable {
+        private var egl: EGL10? = null
+        private var eglDisplay: EGLDisplay? = null
+        private var eglContext: EGLContext? = null
+        private var eglSurface: EGLSurface? = null
+
+        @Volatile private var isRunning = false
+        private var renderThread: Thread? = null
+
         private var renderer: InfinityRenderer? = null
         private var sensorListener: SensorListener? = null
 
         override fun onCreate(surfaceHolder: SurfaceHolder) {
             super.onCreate(surfaceHolder)
             renderer = InfinityRenderer(this@InfinityWallpaperService)
-            glSurfaceView = GLEngineSurfaceView(surfaceHolder)
-            glSurfaceView?.setEGLContextClientVersion(2)
-            glSurfaceView?.setRenderer(renderer)
-            glSurfaceView?.renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
-
             sensorListener = SensorListener(this@InfinityWallpaperService) { x, y ->
                 renderer?.offsetX = x
                 renderer?.offsetY = y
@@ -36,26 +37,91 @@ class InfinityWallpaperService : WallpaperService() {
             super.onVisibilityChanged(visible)
             if (visible) {
                 sensorListener?.register()
-                glSurfaceView?.onResume()
+                startRenderThread()
             } else {
                 sensorListener?.unregister()
-                glSurfaceView?.onPause()
+                stopRenderThread()
             }
         }
 
-        override fun onDestroy() {
-            super.onDestroy()
-            sensorListener?.unregister()
-            glSurfaceView?.onDestroy()
+        override fun onSurfaceDestroyed(holder: SurfaceHolder) {
+            super.onSurfaceDestroyed(holder)
+            stopRenderThread()
         }
 
-        internal inner class GLEngineSurfaceView(private val holder: SurfaceHolder) : GLSurfaceView(this@InfinityWallpaperService) {
-            override fun getHolder(): SurfaceHolder = holder
-            fun onDestroy() { super.onDetachedFromWindow() }
+        private fun startRenderThread() {
+            if (isRunning) return
+            isRunning = true
+            renderThread = Thread(this, "GLRenderThread").apply { start() }
+        }
+
+        private fun stopRenderThread() {
+            isRunning = false
+            try {
+                renderThread?.join(500)
+            } catch (e: Exception) { }
+            renderThread = null
+        }
+
+        override fun run() {
+            initGL()
+            val surfaceHolder = surfaceHolder
+            val frame = surfaceHolder.surfaceFrame
+            renderer?.onSurfaceCreated()
+            renderer?.onSurfaceChanged(frame.width(), frame.height())
+
+            while (isRunning) {
+                if (eglDisplay != null && eglSurface != null) {
+                    renderer?.onDrawFrame()
+                    egl?.eglSwapBuffers(eglDisplay, eglSurface)
+                }
+                try {
+                    Thread.sleep(16) // ~60 FPS
+                } catch (e: Exception) { }
+            }
+
+            cleanupGL()
+        }
+
+        private fun initGL() {
+            egl = EGLContext.getEGL() as EGL10
+            eglDisplay = egl?.eglGetDisplay(EGL10.EGL_DEFAULT_DISPLAY)
+
+            val version = IntArray(2)
+            egl?.eglInitialize(eglDisplay, version)
+
+            val configSpec = intArrayOf(
+                EGL10.EGL_RENDERABLE_TYPE, 4, // EGL_OPENGL_ES2_BIT
+                EGL10.EGL_RED_SIZE, 8,
+                EGL10.EGL_GREEN_SIZE, 8,
+                EGL10.EGL_BLUE_SIZE, 8,
+                EGL10.EGL_ALPHA_SIZE, 8,
+                EGL10.EGL_DEPTH_SIZE, 16,
+                EGL10.EGL_NONE
+            )
+
+            val configs = arrayOfNulls<EGLConfig>(1)
+            val numConfig = IntArray(1)
+            egl?.eglChooseConfig(eglDisplay, configSpec, configs, 1, numConfig)
+
+            val attribList = intArrayOf(0x3098, 2, EGL10.EGL_NONE) // EGL_CONTEXT_CLIENT_VERSION = 2
+            eglContext = egl?.eglCreateContext(eglDisplay, configs[0], EGL10.EGL_NO_CONTEXT, attribList)
+
+            eglSurface = egl?.eglCreateWindowSurface(eglDisplay, configs[0], surfaceHolder, null)
+            egl?.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)
+        }
+
+        private fun cleanupGL() {
+            if (eglDisplay != null) {
+                egl?.eglMakeCurrent(eglDisplay, EGL10.EGL_NO_SURFACE, EGL10.EGL_NO_SURFACE, EGL10.EGL_NO_CONTEXT)
+                if (eglSurface != null) egl?.eglDestroySurface(eglDisplay, eglSurface)
+                if (eglContext != null) egl?.eglDestroyContext(eglDisplay, eglContext)
+                egl?.eglTerminate(eglDisplay)
+            }
         }
     }
 
-    class InfinityRenderer(private val context: Context) : GLSurfaceView.Renderer {
+    class InfinityRenderer(private val context: Context) {
         @Volatile var offsetX: Float = 0f
         @Volatile var offsetY: Float = 0f
         private var program: Int = 0
@@ -94,21 +160,21 @@ class InfinityWallpaperService : WallpaperService() {
             }
         """.trimIndent()
 
-        override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
+        fun onSurfaceCreated() {
             GLES20.glClearColor(0.02f, 0.02f, 0.08f, 1.0f)
             program = ShaderUtils.createProgram(vertexShaderCode, fragmentShaderCode)
             particleSystem = StarfieldParticleSystem(650)
         }
 
-        override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
+        fun onSurfaceChanged(width: Int, height: Int) {
             GLES20.glViewport(0, 0, width, height)
-            val ratio = width.toFloat() / height.toFloat()
+            val ratio = width.toFloat() / if (height == 0) 1f else height.toFloat()
             Matrix.frustumM(projectionMatrix, 0, -ratio, ratio, -1f, 1f, 1f, 10f)
             Matrix.setLookAtM(viewMatrix, 0, 0f, 0f, 3f, 0f, 0f, 0f, 0f, 1f, 0f)
             Matrix.multiplyMM(mvpMatrix, 0, projectionMatrix, 0, viewMatrix, 0)
         }
 
-        override fun onDrawFrame(gl: GL10?) {
+        fun onDrawFrame() {
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
             if (program == 0) return
 
