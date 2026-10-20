@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.Toast
 
 class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -27,7 +28,7 @@ class MainActivity : Activity() {
             textSize = 16f
             setPadding(40, 25, 40, 25)
             setOnClickListener {
-                setLiveWallpaper()
+                openLiveWallpaperPicker()
             }
         }
 
@@ -35,18 +36,36 @@ class MainActivity : Activity() {
         setContentView(layout)
     }
 
-    private fun setLiveWallpaper() {
+    private fun openLiveWallpaperPicker() {
+        val componentName = ComponentName(packageName, "$packageName.InfinityWallpaperService")
+        
+        // Yöntem 1: Doğrudan servisin önizleme ekranını tetikleme
+        val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
+            putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, componentName)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
         try {
-            val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
-                putExtra(
-                    WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-                    ComponentName(packageName, "$packageName.InfinityWallpaperService")
-                )
-            }
             startActivity(intent)
         } catch (e: Exception) {
-            val fallbackIntent = Intent(Intent.ACTION_SET_WALLPAPER)
-            startActivity(fallbackIntent)
+            // Yöntem 2: Samsung özel duvar kağıdı yönlendirmesi
+            try {
+                val samsungIntent = Intent("android.service.wallpaper.CHANGE_LIVE_WALLPAPER").apply {
+                    putExtra("android.service.wallpaper.extra.LIVE_WALLPAPER_COMPONENT", componentName)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(samsungIntent)
+            } catch (ex: Exception) {
+                // Yöntem 3: Genel canlı duvar kağıdı listesini açma
+                try {
+                    val chooserIntent = Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(chooserIntent)
+                } catch (lastEx: Exception) {
+                    Toast.makeText(this, "Canlı duvar kağıdı seçicisi başlatılamadı.", Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 }
